@@ -161,6 +161,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   late VideoPlayerController _videoPlayerController;
   ChewieController? _chewieController;
   bool _isPlayerInitialized = false;
+  double playbackSpeed = 1.0;
 
   @override
   void initState() {
@@ -202,13 +203,66 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     super.dispose();
   }
 
+  void togglePlayPause() {
+    if (_videoPlayerController.value.isPlaying) {
+      _videoPlayerController.pause();
+    } else {
+      _videoPlayerController.play();
+    }
+  }
+
+  void seekToPosition(Duration position) {
+    _videoPlayerController.seekTo(position);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text("Video Player")),
       body: Center(
         child: _isPlayerInitialized
-            ? Chewie(controller: _chewieController!)
+
+            ? Column(
+                children: [
+                  Expanded(child: Chewie(controller: _chewieController!)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: Icon(_videoPlayerController.value.isPlaying
+                            ? Icons.pause
+                            : Icons.play_arrow),
+                        onPressed: togglePlayPause,
+                      ),
+                      Slider(
+                        value: _videoPlayerController.value.position.inSeconds
+                            .toDouble(),
+                        max: _videoPlayerController.value.duration.inSeconds
+                            .toDouble(),
+                        onChanged: (value) {
+                          seekToPosition(Duration(seconds: value.toInt()));
+                        },
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: playbackSpeed,
+                    min: 0.5,
+                    max: 2.0,
+                    divisions: 3,
+                    label: playbackSpeed.toString(),
+                    onChanged: (value) {
+                      setState(() {
+                        playbackSpeed = value;
+                        _videoPlayerController.setPlaybackSpeed(playbackSpeed);
+                      });
+                    },
+                  ),
+                ],
+              )
+
+//             ? Chewie(controller: _chewieController!)
+
             : CircularProgressIndicator(),
       ),
     );
