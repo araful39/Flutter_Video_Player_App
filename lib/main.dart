@@ -1,31 +1,39 @@
 import 'dart:developer';
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:chewie/chewie.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:chewie/chewie.dart';
 import 'package:video_player/video_player.dart';
 
 void main() {
-  runApp(VideoListApp());
+  runApp(MyApp());
 }
 
-class VideoListApp extends StatelessWidget {
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: VideoListScreen(),
+      title: 'Flutter Demo',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: VideoApp(),
     );
   }
 }
 
-class VideoListScreen extends StatefulWidget {
+class VideoApp extends StatefulWidget {
+  const VideoApp({super.key});
+
   @override
-  _VideoListScreenState createState() => _VideoListScreenState();
+  State<VideoApp> createState() => _VideoAppState();
 }
 
-class _VideoListScreenState extends State<VideoListScreen> {
+class _VideoAppState extends State<VideoApp> {
   List<AssetEntity> videoAssets = [];
   bool isLoading = true;
 
@@ -40,11 +48,10 @@ class _VideoListScreenState extends State<VideoListScreen> {
     if (permissionStatus.isGranted) {
       fetchVideos();
     } else {
-      print("Storage permission denied!");
+      log("Storage permission denied!");
     }
   }
 
-  // Fetch videos using the photo_manager package
   Future<void> fetchVideos() async {
     try {
       final List<AssetPathEntity> assetPaths =
@@ -61,15 +68,15 @@ class _VideoListScreenState extends State<VideoListScreen> {
           isLoading = false;
         });
 
-        print("Found ${videoAssets.length} videos!");
+        log("Found ${videoAssets.length} videos!");
       } else {
         setState(() {
           isLoading = false;
         });
-        print("No video paths found.");
+        log("------------------------------------------No video paths found.-----------------------------------------");
       }
     } catch (e) {
-      print("Failed to get videos: $e");
+      log("------------------------------------------Failed to get videos: $e---------------------------------------");
       setState(() {
         isLoading = false;
       });
@@ -81,7 +88,6 @@ class _VideoListScreenState extends State<VideoListScreen> {
 
     log("-------------------------path--$file---------------------------------------------------");
 
-    // Get the file for the video
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -101,13 +107,30 @@ class _VideoListScreenState extends State<VideoListScreen> {
                   itemCount: videoAssets.length,
                   itemBuilder: (context, index) {
                     return ListTile(
-                      leading: FutureBuilder<File?>(
-                        future: videoAssets[index].file,
+                      leading: FutureBuilder<Uint8List?>(
+                        future: videoAssets[index].thumbnailDataWithSize(
+                          ThumbnailSize(200, 200),
+                        ),
                         builder: (context, snapshot) {
                           if (snapshot.connectionState ==
                                   ConnectionState.done &&
                               snapshot.data != null) {
-                            return Icon(Icons.video_collection);
+                            return Stack(
+                              children: [
+                                Image.memory(
+                                  snapshot.data!,
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                ),
+                                Positioned(
+                                  top: 10,
+                                  left: 10,
+                                  child: Icon(Icons.play_circle_fill,
+                                      color: Colors.white, size: 30),
+                                ),
+                              ],
+                            );
                           } else {
                             return Container(
                               width: 50,
@@ -117,7 +140,8 @@ class _VideoListScreenState extends State<VideoListScreen> {
                           }
                         },
                       ),
-                      title: Text(videoAssets[index].title ?? "Unknown Video"),
+                      title: Text(videoAssets[index].title ?? "Unknown Video",
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
                       onTap: () => playVideo(videoAssets[index]),
                     );
                   },
@@ -127,17 +151,17 @@ class _VideoListScreenState extends State<VideoListScreen> {
 }
 
 class VideoPlayerScreen extends StatefulWidget {
+  const VideoPlayerScreen({super.key, required this.videoPath});
   final String videoPath;
-  VideoPlayerScreen({required this.videoPath});
-
   @override
-  _VideoPlayerScreenState createState() => _VideoPlayerScreenState();
+  State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
 }
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   late VideoPlayerController _videoPlayerController;
   ChewieController? _chewieController;
   bool _isPlayerInitialized = false;
+  double playbackSpeed = 1.0;
 
   @override
   void initState() {
@@ -165,11 +189,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       );
 
       setState(() {
-        _isPlayerInitialized =
-            true; // Update the state when the player is ready
+        _isPlayerInitialized = true;
       });
     } catch (e) {
-      print("Error initializing video player: $e");
+      log("--------------------------------------Error initializing video player: $e-------------------------------------");
     }
   }
 
@@ -180,14 +203,63 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     super.dispose();
   }
 
+  void togglePlayPause() {
+    if (_videoPlayerController.value.isPlaying) {
+      _videoPlayerController.pause();
+    } else {
+      _videoPlayerController.play();
+    }
+  }
+
+  void seekToPosition(Duration position) {
+    _videoPlayerController.seekTo(position);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text("Video Player")),
       body: Center(
         child: _isPlayerInitialized
-            ? Chewie(controller: _chewieController!)
-            : CircularProgressIndicator(), // Show loading indicator until player is ready
+            ? Column(
+                children: [
+                  Expanded(child: Chewie(controller: _chewieController!)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: Icon(_videoPlayerController.value.isPlaying
+                            ? Icons.pause
+                            : Icons.play_arrow),
+                        onPressed: togglePlayPause,
+                      ),
+                      Slider(
+                        value: _videoPlayerController.value.position.inSeconds
+                            .toDouble(),
+                        max: _videoPlayerController.value.duration.inSeconds
+                            .toDouble(),
+                        onChanged: (value) {
+                          seekToPosition(Duration(seconds: value.toInt()));
+                        },
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: playbackSpeed,
+                    min: 0.5,
+                    max: 2.0,
+                    divisions: 3,
+                    label: playbackSpeed.toString(),
+                    onChanged: (value) {
+                      setState(() {
+                        playbackSpeed = value;
+                        _videoPlayerController.setPlaybackSpeed(playbackSpeed);
+                      });
+                    },
+                  ),
+                ],
+              )
+            : CircularProgressIndicator(),
       ),
     );
   }
