@@ -221,6 +221,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       appBar: AppBar(title: Text("Video Player")),
       body: Center(
         child: _isPlayerInitialized
+
             ? Column(
                 children: [
                   Expanded(child: Chewie(controller: _chewieController!)),
@@ -259,6 +260,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                   ),
                 ],
               )
+
+//             ? Chewie(controller: _chewieController!)
+
             : CircularProgressIndicator(),
       ),
     );
